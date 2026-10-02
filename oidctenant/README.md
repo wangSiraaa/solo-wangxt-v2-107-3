@@ -38,6 +38,8 @@ integration/            针对真实 Keycloak + 真实 PostgreSQL 的端到端�
 | `auth_requests` | 进行中的授权请求：`state` 主键 + `nonce` + `pkce_verifier`，一次性消费（`consumed_at`） |
 | `sessions` | 不透明会话令牌（数据库存 SHA-256 哈希） |
 | `link_sessions` | 账号关联会话：A/B 两条 leg 的 issuer/subject/auth_time，一次性 token |
+| `identity_handovers` | 租户内身份交接申请；完成前不改变 `identities.member_id`，活跃申请按身份部分唯一 |
+| `identity_handover_events` | 交接审计事件；仅记录锚点、成员/会话引用和事件，不记录邮箱、state、nonce 或令牌 |
 
 > 关联外部身份时，身份行的 `tenant_id` 是**发起关联的租户**。
 > 因此 A 公司成员关联 B 公司 IdP 的身份，锚点是 `(A租户, B的issuer, subject)`，
@@ -55,7 +57,8 @@ integration/            针对真实 Keycloak + 真实 PostgreSQL 的端到端�
 | --- | --- | --- |
 | `authentication_failed` | 401 | 签名/受众/issuer/过期/nonce/PKCE/授权码交换失败、会话无效 |
 | `tenant_unauthorized` | 403 | 租户未启用该 issuer、provider 被禁用、跨租户使用会话 |
-| `binding_conflict` | 409 | 目标身份已绑给别的成员、自关联、关联会话重放 |
+| `binding_conflict` | 409 | 目标身份已绑给别的成员、自关联、关联会话重放、交接状态冲突 |
+| `expired` | 410 | 身份交接申请超过 TTL，已明确转入 expired |
 | `invalid_request` | 400 | state 缺失/已用/伪造、回调地址不在白名单、参数非法 |
 | `reauthentication_required` | 401 | 关联时某一身份未在 `auth_time_max_age` 窗口内重新认证 |
 
@@ -71,6 +74,15 @@ integration/            针对真实 Keycloak + 真实 PostgreSQL 的端到端�
 | `POST /t/{slug}/api/links` | 发起账号关联，返回 `link_token` 与 `link_url`；body `{"issuer":"..."}` |
 | `GET  /oauth/link/callback` | 关联第二身份的回调（强制重认证） |
 | `GET  /t/{slug}/api/links/{token}` | 查询关联会话状态（一次性） |
+| `POST /t/{slug}/api/identity-handovers` | 目标成员发起同租户身份交接，body 指定身份锚点和自己的 member_id |
+| `GET  /t/{slug}/api/identity-handovers` | 查询本人参与的交接申请 |
+| `GET  /t/{slug}/api/identity-handovers/{id}` | 查询本人参与的单个申请 |
+| `POST /t/{slug}/api/identity-handovers/{id}/source-confirm` | 原绑定成员发起强制 OIDC 确认 |
+| `POST /t/{slug}/api/identity-handovers/{id}/target-confirm` | 目标成员用自己当前拥有的另一身份发起强制 OIDC 确认 |
+| `GET  /oauth/handover/callback` | 交接双方 OIDC 确认回调；目标确认成功后在事务内完成交接 |
+| `POST /t/{slug}/api/identity-handovers/{id}/complete` | 恢复/重试完成（仅目标当前会话可调用） |
+| `POST /t/{slug}/api/identity-handovers/{id}/reject` | 原绑定成员拒绝 |
+| `POST /t/{slug}/api/identity-handovers/{id}/cancel` | 目标成员取消 |
 
 ## 安全实现细节
 
@@ -91,6 +103,12 @@ integration/            针对真实 Keycloak + 真实 PostgreSQL 的端到端�
   B 是否已属于他人（冲突则整体回滚，不写入）。
 - **回调白名单**：`redirect_uri` 与 `identity_providers.redirect_uris` 做**精确**匹配，
   不做前缀/通配，杜绝 open redirect。
+- **身份交接**：状态显式为 `pending → source_confirmed → target_confirmed → completed`，
+  终结态另含 `rejected`、`cancelled`、`expired`。每次确认都强制 OIDC `prompt=login`，
+  且 auth request 绑定当前应用会话；回调校验 tenant、issuer、subject、provider、auth_time
+  与参与方。完成事务会锁定交接行和身份行，复核租户、身份当前所有者、双方仍有效的会话、
+  双方新近证明和唯一活跃申请，然后更新 `member_id`、撤销原成员现存会话并追加审计事件。
+  审计表与交接响应不包含邮箱、state、nonce、PKCE、授权码或令牌。
 - **日志脱敏**：访问日志把 query 中的 `code/id_token/access_token/refresh_token/state/token`
   统一替换为 `[REDACTED]`；认证失败只记录分类（signature/audience/nonce/...），
   全代码路径不打印原始令牌。
@@ -149,8 +167,9 @@ KC_BASE_URL=http://localhost:8180 go test ./integration/... -v
 ```
 
 > 集成测试默认把应用起在 **18080** 端口，因此需要在两个 realm 的 `*-rp` 客户端
-> 额外注册 `http://localhost:18080/oauth/callback` 与
-> `http://localhost:18080/oauth/link/callback`（生产部署只注册真实端口即可）。
+> 额外注册 `http://localhost:18080/oauth/callback`、
+> `http://localhost:18080/oauth/link/callback` 与
+> `http://localhost:18080/oauth/handover/callback`（生产部署只注册真实端口即可）。
 
 集成用例与题目要求一一对应：
 
@@ -171,6 +190,12 @@ KC_BASE_URL=http://localhost:8180 go test ./integration/... -v
 | `TestUnauthorizedIssuerForTenant` | 未授权 issuer → 403 `tenant_unauthorized` |
 | `TestRedirectURIMustBeWhitelisted` | 未登记回调地址 → 400 `invalid_request` |
 | `TestLinkRejectsDisabledProvider` | 关联前禁用 provider 授权 → 403 `tenant_unauthorized` |
+| `TestIdentityHandoverHappyPath` | 双方确认后身份移动到目标成员，原成员旧会话失效，再登录落到目标成员，审计无敏感字段 |
+| `TestIdentityHandoverRejectKeepsBinding` | 原成员拒绝后原绑定不变，迟到确认不能复活申请 |
+| `TestIdentityHandoverExpiredKeepsBinding` | TTL 后状态明确为 `expired`，原绑定不变 |
+| `TestIdentityHandoverConcurrentApplications` | 两个成员并发申请同一身份仅一个活跃申请 |
+| `TestIdentityHandoverCancelRejectsLateProof` | 取消后迟到 OIDC 回调返回状态冲突，申请保持 cancelled |
+| `TestIdentityHandoverTenantAndSessionBoundaries` | 跨租户同邮箱、非参与成员和错误会话都不能参与交接 |
 | `TestWrongPasswordIsAuthnFailure` | IdP 凭证错误不产生会话/成员 |
 
 ## 生产化前还应补充（本项目刻意省略）

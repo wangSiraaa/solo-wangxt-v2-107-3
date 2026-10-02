@@ -21,8 +21,10 @@ var (
 	// ErrConsumed 表示 state 已被消费（回调重复到达）或根本不存在。
 	// 对二者返回同样的错误，避免通过接口枚举有效 state。
 	ErrConsumed = errors.New("store: auth request already consumed or unknown")
-	// ErrConflict 表示唯一约束冲突（绑定冲突）。
-	ErrConflict = errors.New("store: unique constraint violation")
+	// ErrConflict 表示唯一约束冲突或状态机冲突。
+	ErrConflict = errors.New("store: unique constraint or state conflict")
+	// ErrExpired 表示交接申请已超过 TTL。
+	ErrExpired = errors.New("store: handover expired")
 )
 
 type Store struct {
@@ -128,10 +130,10 @@ func (s *Store) UpsertProvider(ctx context.Context, p *models.Provider) error {
 func (s *Store) CreateAuthRequest(ctx context.Context, ar *models.AuthRequest) error {
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO auth_requests
-		 (state, kind, tenant_id, idp_id, nonce, pkce_verifier, return_to, link_token, session_id)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+		 (state, kind, tenant_id, idp_id, nonce, pkce_verifier, return_to, link_token, session_id, handover_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
 		ar.State, ar.Kind, ar.TenantID, ar.IDPID, ar.Nonce, ar.PKCEVerifier,
-		ar.ReturnTo, nullableStr(ar.LinkToken), ar.SessionID)
+		ar.ReturnTo, nullableStr(ar.LinkToken), ar.SessionID, ar.HandoverID)
 	return mapErr(err)
 }
 
@@ -147,12 +149,12 @@ func (s *Store) ConsumeAuthRequest(ctx context.Context, state string) (*models.A
 	var ar models.AuthRequest
 	err = tx.QueryRow(ctx,
 		`SELECT state, kind, tenant_id, idp_id, nonce, pkce_verifier, return_to,
-		        link_token, session_id, created_at
+		        link_token, session_id, handover_id, created_at
 		 FROM auth_requests WHERE state = $1 AND consumed_at IS NULL
 		 FOR UPDATE`,
 		state,
 	).Scan(&ar.State, &ar.Kind, &ar.TenantID, &ar.IDPID, &ar.Nonce,
-		&ar.PKCEVerifier, &ar.ReturnTo, &ar.LinkToken, &ar.SessionID, &ar.CreatedAt)
+		&ar.PKCEVerifier, &ar.ReturnTo, &ar.LinkToken, &ar.SessionID, &ar.HandoverID, &ar.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrConsumed
@@ -298,6 +300,21 @@ func (s *Store) IdentitiesOfMember(ctx context.Context, tenantID, memberID uuid.
 		out = append(out, i)
 	}
 	return out, rows.Err()
+}
+
+// IdentityByID 按主键读取租户内身份。
+func (s *Store) IdentityByID(ctx context.Context, tenantID, id uuid.UUID) (*models.Identity, error) {
+	var i models.Identity
+	err := s.pool.QueryRow(ctx,
+		`SELECT id, tenant_id, member_id, issuer, subject, email, email_verified
+		 FROM identities WHERE tenant_id = $1 AND id = $2`,
+		tenantID, id,
+	).Scan(&i.ID, &i.TenantID, &i.MemberID, &i.Issuer, &i.Subject,
+		&i.Email, &i.EmailVerified)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	return &i, nil
 }
 
 // IdentityByAnchor 按业务身份锚点查找（绝不按邮箱）。

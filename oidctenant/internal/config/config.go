@@ -14,12 +14,13 @@ type Config struct {
 	BaseURL string
 	Addr    string
 
-	SessionTTL      time.Duration
-	LinkTTL         time.Duration
-	AuthRequestTTL  time.Duration
-	CookieSecure    bool
-	CookieSameSite  string
-	CleanupInterval time.Duration
+	SessionTTL       time.Duration
+	LinkTTL          time.Duration
+	HandoverTTL      time.Duration
+	AuthRequestTTL   time.Duration
+	CookieSecure     bool
+	CookieSameSite   string
+	CleanupInterval  time.Duration
 }
 
 func getenv(key, def string) string {
@@ -34,12 +35,13 @@ func Load() (*Config, error) {
 		DatabaseURL:     os.Getenv("DATABASE_URL"),
 		BaseURL:         strings.TrimRight(getenv("BASE_URL", "http://localhost:8080"), "/"),
 		Addr:            getenv("ADDR", ":8080"),
-		SessionTTL:      8 * time.Hour,
-		LinkTTL:         10 * time.Minute,
-		AuthRequestTTL:  10 * time.Minute,
-		CookieSecure:    os.Getenv("COOKIE_SECURE") == "true",
-		CookieSameSite:  getenv("COOKIE_SAMESITE", "lax"),
-		CleanupInterval: time.Minute,
+		SessionTTL:       8 * time.Hour,
+		LinkTTL:          10 * time.Minute,
+		HandoverTTL:      10 * time.Minute,
+		AuthRequestTTL:   10 * time.Minute,
+		CookieSecure:     os.Getenv("COOKIE_SECURE") == "true",
+		CookieSameSite:   getenv("COOKIE_SAMESITE", "lax"),
+		CleanupInterval:  time.Minute,
 	}
 	if cfg.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")

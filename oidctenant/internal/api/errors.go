@@ -18,8 +18,10 @@ const (
 	ErrBindingConflict ErrorType = "binding_conflict"
 	// ErrInvalidRequest 请求参数非法或回调地址不在白名单。
 	ErrInvalidRequest ErrorType = "invalid_request"
-	// ErrReauthRequired 关联账号时身份未在规定时间内重新认证。
+	// ErrReauthRequired 关联账号/交接时身份未在规定时间内重新认证。
 	ErrReauthRequired ErrorType = "reauthentication_required"
+	// ErrExpired 表示有明确状态的交接申请已过期。
+	ErrExpired ErrorType = "expired"
 )
 
 // APIError 携带 HTTP 状态、稳定错误码与可展示的简短描述。
@@ -54,6 +56,10 @@ func badRequest(msg string) *APIError {
 
 func reauthRequired(msg string) *APIError {
 	return newAPIError(http.StatusUnauthorized, ErrReauthRequired, msg)
+}
+
+func expired(msg string) *APIError {
+	return newAPIError(http.StatusGone, ErrExpired, msg)
 }
 
 func asAPIError(err error) (*APIError, bool) {

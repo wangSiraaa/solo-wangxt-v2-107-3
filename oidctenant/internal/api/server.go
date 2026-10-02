@@ -17,9 +17,10 @@ import (
 
 const (
 	// callbackPath 是应用唯一的 OIDC 回调路径，redirect_uri 由 BASE_URL 拼接。
-	callbackPath  = "/oauth/callback"
-	linkCBPath    = "/oauth/link/callback"
-	sessionCookie = "sid"
+	callbackPath   = "/oauth/callback"
+	linkCBPath     = "/oauth/link/callback"
+	handoverCBPath = "/oauth/handover/callback"
+	sessionCookie  = "sid"
 )
 
 type ctxKey string
@@ -62,6 +63,17 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /t/{slug}/api/links", s.requireSession(s.linkStart))
 	mux.HandleFunc("GET "+linkCBPath, s.requireSession(s.linkCallback))
 	mux.HandleFunc("GET /t/{slug}/api/links/{token}", s.requireSession(s.linkFinalize))
+
+	// 租户内身份交接
+	mux.HandleFunc("POST /t/{slug}/api/identity-handovers", s.requireSession(s.createHandover))
+	mux.HandleFunc("GET /t/{slug}/api/identity-handovers", s.requireSession(s.listHandovers))
+	mux.HandleFunc("GET /t/{slug}/api/identity-handovers/{id}", s.requireSession(s.getHandover))
+	mux.HandleFunc("POST /t/{slug}/api/identity-handovers/{id}/source-confirm", s.requireSession(s.startSourceHandoverConfirm))
+	mux.HandleFunc("POST /t/{slug}/api/identity-handovers/{id}/target-confirm", s.requireSession(s.startTargetHandoverConfirm))
+	mux.HandleFunc("POST /t/{slug}/api/identity-handovers/{id}/complete", s.requireSession(s.completeHandover))
+	mux.HandleFunc("POST /t/{slug}/api/identity-handovers/{id}/reject", s.requireSession(s.rejectHandover))
+	mux.HandleFunc("POST /t/{slug}/api/identity-handovers/{id}/cancel", s.requireSession(s.cancelHandover))
+	mux.HandleFunc("GET "+handoverCBPath, s.requireSession(s.handoverCallback))
 
 	// 受保护的业务接口
 	mux.HandleFunc("GET /t/{slug}/api/me", s.requireSession(s.me))

@@ -29,7 +29,8 @@
       "secret": "globex-rp-secret",
       "redirectUris": [
         "http://localhost:8080/oauth/callback",
-        "http://localhost:8080/oauth/link/callback"
+        "http://localhost:8080/oauth/link/callback",
+        "http://localhost:8080/oauth/handover/callback"
       ],
       "webOrigins": [],
       "defaultClientScopes": [

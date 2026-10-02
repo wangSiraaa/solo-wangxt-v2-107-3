@@ -61,6 +61,7 @@ type AuthRequest struct {
 	ReturnTo     string
 	LinkToken    NullString
 	SessionID    *uuid.UUID
+	HandoverID   *uuid.UUID
 	CreatedAt    time.Time
 }
 
@@ -89,4 +90,47 @@ type LinkSession struct {
 	BState         string
 	Status         string
 	ExpiresAt      time.Time
+}
+
+type IdentityHandover struct {
+	ID                 uuid.UUID
+	TenantID           uuid.UUID
+	IdentityID         uuid.UUID
+	IdentityIssuer     string
+	IdentitySubject    string
+	SourceMemberID     uuid.UUID
+	TargetMemberID     uuid.UUID
+	CreatedBySessionID *uuid.UUID
+
+	Status string
+
+	SourceSessionID   *uuid.UUID
+	SourceIDPID       *uuid.UUID
+	SourceIssuer      string
+	SourceSubject     string
+	SourceAuthTime    NullTime
+	SourceConfirmedAt NullTime
+
+	TargetSessionID   *uuid.UUID
+	TargetIDPID       *uuid.UUID
+	TargetIssuer      string
+	TargetSubject     string
+	TargetAuthTime    NullTime
+	TargetConfirmedAt NullTime
+
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+	CompletedAt NullTime
+	DecidedAt   NullTime
+}
+
+type IdentityHandoverEvent struct {
+	ID             uuid.UUID
+	HandoverID     uuid.UUID
+	TenantID       uuid.UUID
+	IdentityID     uuid.UUID
+	ActorMemberID  *uuid.UUID
+	ActorSessionID *uuid.UUID
+	EventType      string
+	CreatedAt      time.Time
 }

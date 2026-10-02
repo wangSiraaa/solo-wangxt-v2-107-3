@@ -24,6 +24,10 @@ func (s *Server) redirectURLLink() string {
 	return s.cfg.BaseURL + linkCBPath
 }
 
+func (s *Server) redirectURLHandover() string {
+	return s.cfg.BaseURL + handoverCBPath
+}
+
 func (s *Server) now() time.Time { return s.nowFunc() }
 
 // loadTenantProvider 解析租户 slug + issuer 查询参数，并确保该租户启用了该 IdP。

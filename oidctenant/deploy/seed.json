@@ -12,7 +12,8 @@
           "client_secret": "acme-rp-secret",
           "redirect_uris": [
             "http://localhost:8080/oauth/callback",
-            "http://localhost:8080/oauth/link/callback"
+            "http://localhost:8080/oauth/link/callback",
+            "http://localhost:8080/oauth/handover/callback"
           ],
           "auth_time_max_age": 300,
           "enabled": true
@@ -24,7 +25,8 @@
           "client_secret": "globex-rp-secret",
           "redirect_uris": [
             "http://localhost:8080/oauth/callback",
-            "http://localhost:8080/oauth/link/callback"
+            "http://localhost:8080/oauth/link/callback",
+            "http://localhost:8080/oauth/handover/callback"
           ],
           "auth_time_max_age": 300,
           "enabled": true
@@ -43,7 +45,8 @@
           "client_secret": "globex-rp-secret",
           "redirect_uris": [
             "http://localhost:8080/oauth/callback",
-            "http://localhost:8080/oauth/link/callback"
+            "http://localhost:8080/oauth/link/callback",
+            "http://localhost:8080/oauth/handover/callback"
           ],
           "auth_time_max_age": 300,
           "enabled": true
@@ -55,7 +58,8 @@
           "client_secret": "acme-rp-secret",
           "redirect_uris": [
             "http://localhost:8080/oauth/callback",
-            "http://localhost:8080/oauth/link/callback"
+            "http://localhost:8080/oauth/link/callback",
+            "http://localhost:8080/oauth/handover/callback"
           ],
           "auth_time_max_age": 300,
           "enabled": true

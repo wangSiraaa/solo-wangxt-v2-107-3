@@ -85,6 +85,9 @@ func cleanupLoop(ctx context.Context, st *store.Store, interval, ttl time.Durati
 			if err := st.DeleteExpiredAuthRequests(ctx, time.Now().Add(-ttl)); err != nil {
 				logger.Printf("cleanup auth_requests: %v", err)
 			}
+			if err := st.ExpireDueHandovers(ctx, time.Now()); err != nil {
+				logger.Printf("expire identity handovers: %v", err)
+			}
 		}
 	}
 }

@@ -61,6 +61,15 @@ func (b *browserClient) me(tenantSlug string) map[string]any {
 	return getJSON(b.t, b.app, appBaseURL+"/t/"+tenantSlug+"/api/me", http.StatusOK)
 }
 
+func (b *browserClient) meResponse(tenantSlug string) *http.Response {
+	b.t.Helper()
+	resp, err := b.app.Get(appBaseURL + "/t/" + tenantSlug + "/api/me")
+	if err != nil {
+		b.t.Fatalf("GET me: %v", err)
+	}
+	return resp
+}
+
 func (b *browserClient) memberID(tenantSlug string) string {
 	return b.me(tenantSlug)["member_id"].(string)
 }
