@@ -39,6 +39,7 @@ const (
 	appBaseURL       = "http://localhost:" + appPort
 	loginCallback    = appBaseURL + "/oauth/callback"
 	linkCallback     = appBaseURL + "/oauth/link/callback"
+	handoffCallback  = appBaseURL + "/oauth/handoff/callback"
 )
 
 // 固定 UUID，便于 seed 与断言引用。
@@ -111,27 +112,27 @@ func startEnv(t *testing.T) *testEnv {
 	seedTenant(t, st, tenantAcmeID, "acme", "Acme Corp", models.Provider{
 		ID: idpAcmeSelfID, TenantID: tenantAcmeID,
 		Issuer: issuer("acme"), ClientID: "acme-rp", ClientSecret: "acme-rp-secret",
-		RedirectURIs:   []string{loginCallback, linkCallback},
+		RedirectURIs:   []string{loginCallback, linkCallback, handoffCallback},
 		AuthTimeMaxAge: 300, Enabled: true,
 	})
 	// acme 额外授权外部 globex issuer：凭证是 globex realm 的客户端（关联用）。
 	seedTenant(t, st, tenantAcmeID, "acme", "Acme Corp", models.Provider{
 		ID: idpAcmeGlobexID, TenantID: tenantAcmeID,
 		Issuer: issuer("globex"), ClientID: "globex-rp", ClientSecret: "globex-rp-secret",
-		RedirectURIs:   []string{loginCallback, linkCallback},
+		RedirectURIs:   []string{loginCallback, linkCallback, handoffCallback},
 		AuthTimeMaxAge: 300, Enabled: true,
 	})
 	seedTenant(t, st, tenantGlobexID, "globex", "Globex Inc", models.Provider{
 		ID: idpGlobexSelfID, TenantID: tenantGlobexID,
 		Issuer: issuer("globex"), ClientID: "globex-rp", ClientSecret: "globex-rp-secret",
-		RedirectURIs:   []string{loginCallback, linkCallback},
+		RedirectURIs:   []string{loginCallback, linkCallback, handoffCallback},
 		AuthTimeMaxAge: 300, Enabled: true,
 	})
 	// globex 额外授权外部 acme issuer。
 	seedTenant(t, st, tenantGlobexID, "globex", "Globex Inc", models.Provider{
 		ID: idpGlobexAcmeID, TenantID: tenantGlobexID,
 		Issuer: issuer("acme"), ClientID: "acme-rp", ClientSecret: "acme-rp-secret",
-		RedirectURIs:   []string{loginCallback, linkCallback},
+		RedirectURIs:   []string{loginCallback, linkCallback, handoffCallback},
 		AuthTimeMaxAge: 300, Enabled: true,
 	})
 
@@ -141,6 +142,7 @@ func startEnv(t *testing.T) *testEnv {
 		Addr:           ":" + appPort,
 		SessionTTL:     time.Hour,
 		LinkTTL:        10 * time.Minute,
+		HandoffTTL:     15 * time.Minute,
 		AuthRequestTTL: 10 * time.Minute,
 		CookieSecure:   false,
 		CookieSameSite: "lax",

@@ -60,6 +60,7 @@ type AuthRequest struct {
 	PKCEVerifier string
 	ReturnTo     string
 	LinkToken    NullString
+	HandoffID    *uuid.UUID
 	SessionID    *uuid.UUID
 	CreatedAt    time.Time
 }
@@ -89,4 +90,84 @@ type LinkSession struct {
 	BState         string
 	Status         string
 	ExpiresAt      time.Time
+}
+
+// 交接申请状态机（DB CHECK 与之一一对应）：
+//
+//	owner_pending  -> target_pending -> completed
+//	       |               |
+//	       v               v
+//	    rejected / cancelled / expired（均为终态）
+const (
+	HandoffOwnerPending  = "owner_pending"
+	HandoffTargetPending = "target_pending"
+	HandoffCompleted     = "completed"
+	HandoffRejected      = "rejected"
+	HandoffCancelled     = "cancelled"
+	HandoffExpired       = "expired"
+)
+
+// HandoffRequest 是一条租户内身份交接申请。
+// 令牌与邮箱绝不持久化：OIDC 证明只保留 (issuer,subject) 锚点与 auth_time。
+type HandoffRequest struct {
+	ID             uuid.UUID
+	TenantID       uuid.UUID
+	IdentityID     uuid.UUID
+	Issuer         string
+	Subject        string
+	OwnerMemberID  uuid.UUID
+	TargetMemberID uuid.UUID
+
+	// TargetAnchorIssuer/TargetAnchorSubject 是目标成员当前持有的已核实身份锚点。
+	TargetAnchorIssuer  string
+	TargetAnchorSubject string
+
+	OwnerSessionID  *uuid.UUID
+	TargetSessionID *uuid.UUID
+
+	OwnerConfirmState  string
+	TargetConfirmState string
+
+	OwnerAuthIssuer   string
+	OwnerAuthSubject  string
+	OwnerAuthTime     NullTime
+	TargetAuthIssuer  string
+	TargetAuthSubject string
+	TargetAuthTime    NullTime
+
+	Status    string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+
+	OwnerConfirmedAt  NullTime
+	TargetConfirmedAt NullTime
+	CompletedAt       NullTime
+	DecidedAt         NullTime
+}
+
+// IsParticipant 判断成员是否为该申请的一方。
+func (h *HandoffRequest) IsParticipant(memberID uuid.UUID) bool {
+	return h.OwnerMemberID == memberID || h.TargetMemberID == memberID
+}
+
+// HandoffRecord 是完成时留下的审计记录：无令牌、无邮箱。
+type HandoffRecord struct {
+	ID                uuid.UUID
+	HandoffID         uuid.UUID
+	TenantID          uuid.UUID
+	IdentityID        uuid.UUID
+	Issuer            string
+	Subject           string
+	FromMemberID      uuid.UUID
+	ToMemberID        uuid.UUID
+	OwnerSessionID    uuid.UUID
+	TargetSessionID   uuid.UUID
+	OwnerAuthIssuer   string
+	OwnerAuthSubject  string
+	OwnerAuthTime     NullTime
+	TargetAuthIssuer  string
+	TargetAuthSubject string
+	TargetAuthTime    NullTime
+	CreatedAt         time.Time
+	CompletedAt       time.Time
 }

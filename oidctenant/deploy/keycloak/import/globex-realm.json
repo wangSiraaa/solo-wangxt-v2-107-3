@@ -12,7 +12,9 @@
   "ssoSessionMaxLifespan": 3600,
   "roles": {
     "realm": [
-      { "name": "default" }
+      {
+        "name": "default"
+      }
     ]
   },
   "clients": [
@@ -29,7 +31,8 @@
       "secret": "globex-rp-secret",
       "redirectUris": [
         "http://localhost:8080/oauth/callback",
-        "http://localhost:8080/oauth/link/callback"
+        "http://localhost:8080/oauth/link/callback",
+        "http://localhost:8080/oauth/handoff/callback"
       ],
       "webOrigins": [],
       "defaultClientScopes": [
@@ -50,7 +53,9 @@
       "directAccessGrantsEnabled": false,
       "secret": "probe-secret",
       "redirectUris": [
-        "http://localhost:8080/oauth/callback"
+        "http://localhost:8080/oauth/callback",
+        "http://localhost:8080/oauth/link/callback",
+        "http://localhost:8080/oauth/handoff/callback"
       ],
       "webOrigins": [],
       "defaultClientScopes": [
@@ -71,9 +76,15 @@
       "lastName": "Globex",
       "requiredActions": [],
       "credentials": [
-        { "type": "password", "value": "aliceg-pass", "temporary": false }
+        {
+          "type": "password",
+          "value": "aliceg-pass",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["default"]
+      "realmRoles": [
+        "default"
+      ]
     },
     {
       "username": "bob",
@@ -84,9 +95,15 @@
       "lastName": "Globex",
       "requiredActions": [],
       "credentials": [
-        { "type": "password", "value": "bobg-pass", "temporary": false }
+        {
+          "type": "password",
+          "value": "bobg-pass",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["default"]
+      "realmRoles": [
+        "default"
+      ]
     }
   ],
   "components": {
@@ -95,16 +112,24 @@
         "name": "rsa-initial",
         "providerId": "rsa-generated",
         "config": {
-          "priority": ["100"],
-          "keySize": ["2048"]
+          "priority": [
+            "100"
+          ],
+          "keySize": [
+            "2048"
+          ]
         }
       },
       {
         "name": "rsa-rotated",
         "providerId": "rsa-generated",
         "config": {
-          "priority": ["10"],
-          "keySize": ["2048"]
+          "priority": [
+            "10"
+          ],
+          "keySize": [
+            "2048"
+          ]
         }
       }
     ]

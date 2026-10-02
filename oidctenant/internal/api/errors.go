@@ -20,6 +20,14 @@ const (
 	ErrInvalidRequest ErrorType = "invalid_request"
 	// ErrReauthRequired 关联账号时身份未在规定时间内重新认证。
 	ErrReauthRequired ErrorType = "reauthentication_required"
+	// ErrHandoffExpired 身份交接申请已超过有效期。
+	ErrHandoffExpired ErrorType = "handoff_expired"
+	// ErrHandoffConflict 身份交接申请处于不允许该操作的状态（重复确认、回调乱序、
+	// 申请已取消/拒绝/完成、存在另一个活申请等）。
+	ErrHandoffConflict ErrorType = "handoff_conflict"
+	// ErrHandoffNotFound 申请不存在，或当前成员/租户不是该申请的参与方
+	// （不区分“不存在”与“无权查看”，避免枚举）。
+	ErrHandoffNotFound ErrorType = "handoff_not_found"
 )
 
 // APIError 携带 HTTP 状态、稳定错误码与可展示的简短描述。
@@ -54,6 +62,18 @@ func badRequest(msg string) *APIError {
 
 func reauthRequired(msg string) *APIError {
 	return newAPIError(http.StatusUnauthorized, ErrReauthRequired, msg)
+}
+
+func handoffExpired(msg string) *APIError {
+	return newAPIError(http.StatusGone, ErrHandoffExpired, msg)
+}
+
+func handoffConflict(msg string) *APIError {
+	return newAPIError(http.StatusConflict, ErrHandoffConflict, msg)
+}
+
+func handoffNotFound(msg string) *APIError {
+	return newAPIError(http.StatusNotFound, ErrHandoffNotFound, msg)
 }
 
 func asAPIError(err error) (*APIError, bool) {

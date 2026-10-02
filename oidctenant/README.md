@@ -38,6 +38,8 @@ integration/            针对真实 Keycloak + 真实 PostgreSQL 的端到端�
 | `auth_requests` | 进行中的授权请求：`state` 主键 + `nonce` + `pkce_verifier`，一次性消费（`consumed_at`） |
 | `sessions` | 不透明会话令牌（数据库存 SHA-256 哈希） |
 | `link_sessions` | 账号关联会话：A/B 两条 leg 的 issuer/subject/auth_time，一次性 token |
+| `handoff_requests` | 身份交接申请：显式状态机 `owner_pending → target_pending → completed`，以及 `rejected/cancelled/expired` 终态；双方各自绑定当前会话与一次性确认 state；部分唯一索引保证同一身份至多一个活申请 |
+| `handoff_records` | 交接完成审计记录：身份锚点、双方成员/会话、双方 OIDC 证明锚点与 auth_time；**刻意不含邮箱与任何令牌** |
 
 > 关联外部身份时，身份行的 `tenant_id` 是**发起关联的租户**。
 > 因此 A 公司成员关联 B 公司 IdP 的身份，锚点是 `(A租户, B的issuer, subject)`，
@@ -57,7 +59,10 @@ integration/            针对真实 Keycloak + 真实 PostgreSQL 的端到端�
 | `tenant_unauthorized` | 403 | 租户未启用该 issuer、provider 被禁用、跨租户使用会话 |
 | `binding_conflict` | 409 | 目标身份已绑给别的成员、自关联、关联会话重放 |
 | `invalid_request` | 400 | state 缺失/已用/伪造、回调地址不在白名单、参数非法 |
-| `reauthentication_required` | 401 | 关联时某一身份未在 `auth_time_max_age` 窗口内重新认证 |
+| `reauthentication_required` | 401 | 关联/交接确认时某一身份未在 `auth_time_max_age` 窗口内重新认证 |
+| `handoff_conflict` | 409 | 交接申请处于不允许该操作的状态（重复确认、回调乱序、申请已取消/拒绝/完成、同一身份已有活申请、身份不属调用方） |
+| `handoff_expired` | 410 | 交接申请已超过有效期 |
+| `handoff_not_found` | 404 | 申请不存在，或当前成员/租户不是参与方（不区分二者，避免枚举） |
 
 端点：
 
@@ -71,6 +76,14 @@ integration/            针对真实 Keycloak + 真实 PostgreSQL 的端到端�
 | `POST /t/{slug}/api/links` | 发起账号关联，返回 `link_token` 与 `link_url`；body `{"issuer":"..."}` |
 | `GET  /oauth/link/callback` | 关联第二身份的回调（强制重认证） |
 | `GET  /t/{slug}/api/links/{token}` | 查询关联会话状态（一次性） |
+| `POST /t/{slug}/api/handoffs` | 发起身份交接申请：`{"identity":{"issuer","subject"},"target":{"issuer","subject"}}`（目标成员只用已核实锚点定位，绝不按邮箱）；返回 201 申请视图（`owner_pending`） |
+| `GET  /t/{slug}/api/handoffs` | 列出**本人参与**的全部申请（原绑定方或目标方） |
+| `GET  /t/{slug}/api/handoffs/{id}` | 查询单个申请（仅参与方，且必须同租户） |
+| `POST /t/{slug}/api/handoffs/{id}/confirm` | 发起本人这一方的确认，返回 `confirm_url`（强制 `prompt=login`） |
+| `GET  /oauth/handoff/callback` | 双方确认共用的 OIDC 回调（一次性 state；目标方确认通过即在同请求内完成） |
+| `POST /t/{slug}/api/handoffs/{id}/reject` | 原绑定方在 `owner_pending`、目标方在 `target_pending` 拒绝 |
+| `POST /t/{slug}/api/handoffs/{id}/cancel` | 任意参与方在申请存活时取消（双方在各自阶段均可） |
+| `POST /t/{slug}/api/handoffs/{id}/complete` | 幂等完成入口（目标方回调通常已自动完成；用于双方确认都已新鲜提交后的显式完成） |
 
 ## 安全实现细节
 
@@ -94,6 +107,22 @@ integration/            针对真实 Keycloak + 真实 PostgreSQL 的端到端�
 - **日志脱敏**：访问日志把 query 中的 `code/id_token/access_token/refresh_token/state/token`
   统一替换为 `[REDACTED]`；认证失败只记录分类（signature/audience/nonce/...），
   全代码路径不打印原始令牌。
+- **身份交接（离职成员 → 新员工）**：
+  - 显式状态机 `owner_pending → target_pending → completed`，终态
+    `rejected / cancelled / expired`；**完成前 `identities.member_id` 绝不改变**。
+  - 双方确认都强制 `prompt=login,max_age=0` 并核对 IdP `auth_time` 新鲜度；
+    每次确认绑定“发起确认的当前会话”与一次性 state，回调时逐字节复核
+    会话、成员、租户、角色、state 与 OIDC 锚点 `(issuer,subject)`（邮箱从不参与）。
+  - 同一身份的“活”申请由部分唯一索引裁决，并发申请只有一个进入完成路径；
+    完成事务与登录路径共用按 `(issuer,subject)` 的事务级咨询锁 + 行锁，
+    回调乱序/重复确认/并发完成都不可能产生双归属。
+  - `CompleteHandoff` 单事务复核 tenant、issuer、subject、身份当前所有者、
+    目标锚点当前归属、双方会话有效性与双方证明新鲜度，再移动 `member_id`，
+    并写一条**不含令牌与邮箱**的 `handoff_records` 审计记录。
+  - 取消/拒绝/过期会清空待消费 state 绑定：迟到或重放的 OIDC 回调一律
+    `handoff_conflict`/`invalid_request`，无法复活终态申请。
+  - owner 证明在目标确认前变陈旧时，可在 `target_pending` 重新确认刷新证明，
+    原归属在整个过程中保持不变。
 
 ## 本地运行
 
@@ -172,11 +201,23 @@ KC_BASE_URL=http://localhost:8180 go test ./integration/... -v
 | `TestRedirectURIMustBeWhitelisted` | 未登记回调地址 → 400 `invalid_request` |
 | `TestLinkRejectsDisabledProvider` | 关联前禁用 provider 授权 → 403 `tenant_unauthorized` |
 | `TestWrongPasswordIsAuthnFailure` | IdP 凭证错误不产生会话/成员 |
+| `TestHandoffHappyPath` | 双方确认完成交接：身份只归目标成员，原成员再用它登录落到目标成员；审计记录无令牌/邮箱；参与方/非参与方/跨租户/未认证查询边界 |
+| `TestHandoffOwnerRejectKeepsBinding` / `TestHandoffTargetRejectKeepsBinding` | 任一方在自己的窗口拒绝 → `rejected`，原绑定不变，无审计记录 |
+| `TestHandoffExpiryKeepsBinding` | `owner_pending`/`target_pending` 阶段过期 → 410 `handoff_expired`，原绑定不变 |
+| `TestHandoffConcurrentRequestsOnlyOneActive` | 同身份并发申请只有 1 行活申请，只有它能完成；终态后可再建新申请 |
+| `TestHandoffConcurrentCompleteOnlyOneMoves` | 双方证明就位后并发完成，恰好一个成功，无双重归属/双审计记录 |
+| `TestHandoffCancelledLateCallbackCannotRevive` | 取消后迟到的 OIDC 回调 409、重放 400，申请不复活、身份不移动 |
+| `TestHandoffWrongSessionAndTenantCannotParticipate` | 错误会话、跨租户会话/锚点、同邮箱跨租户用户都不能参与交接 |
+| `TestHandoffOwnerStaleProofMustReconfirm` | owner 证明陈旧时完成被拒 401，重新新近确认后才完成，期间归属不变 |
+| `TestHandoffProofAnchorMismatchRejected` | 确认时认证成别的身份 → 401，证明不写入、状态不推进 |
+| `TestHandoffCreateValidation` | 交接他人身份 409、自我交接 400、锚点不存在 404、坏请求体 400；普通关联冲突行为不受影响 |
 
 ## 生产化前还应补充（本项目刻意省略）
 
 - provider `client_secret` / 会话存储的 KMS 加密与静态加密；
 - CSRF 防护（state 已绑定浏览器会话，仍建议对发起端点加 CSRF token）；
-- refresh token 轮转、会话固定防护、`sid`/`jti` 反向注销（back-channel logout）；
 - issuer 级别允许的签名算法/时钟偏移（leeway）做成可配置；
-- 审计日志（记录谁在何时把哪个 `(issuer,subject)` 关联给了哪个 member）。
+- refresh token 轮转、会话固定防护、`sid`/`jti` 反向注销（back-channel logout）；
+- 普通账号关联也补一份与 `handoff_records` 同规格的审计记录
+  （目前交接已留审计，关联仅依赖应用日志）；
+- 交接申请支持目标方主动“接受/拒绝”的通知通道（当前目标方需轮询 `GET /api/handoffs`）。

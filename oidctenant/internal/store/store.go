@@ -128,10 +128,10 @@ func (s *Store) UpsertProvider(ctx context.Context, p *models.Provider) error {
 func (s *Store) CreateAuthRequest(ctx context.Context, ar *models.AuthRequest) error {
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO auth_requests
-		 (state, kind, tenant_id, idp_id, nonce, pkce_verifier, return_to, link_token, session_id)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+		 (state, kind, tenant_id, idp_id, nonce, pkce_verifier, return_to, link_token, handoff_id, session_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
 		ar.State, ar.Kind, ar.TenantID, ar.IDPID, ar.Nonce, ar.PKCEVerifier,
-		ar.ReturnTo, nullableStr(ar.LinkToken), ar.SessionID)
+		ar.ReturnTo, nullableStr(ar.LinkToken), ar.HandoffID, ar.SessionID)
 	return mapErr(err)
 }
 
@@ -147,12 +147,12 @@ func (s *Store) ConsumeAuthRequest(ctx context.Context, state string) (*models.A
 	var ar models.AuthRequest
 	err = tx.QueryRow(ctx,
 		`SELECT state, kind, tenant_id, idp_id, nonce, pkce_verifier, return_to,
-		        link_token, session_id, created_at
+		        link_token, handoff_id, session_id, created_at
 		 FROM auth_requests WHERE state = $1 AND consumed_at IS NULL
 		 FOR UPDATE`,
 		state,
 	).Scan(&ar.State, &ar.Kind, &ar.TenantID, &ar.IDPID, &ar.Nonce,
-		&ar.PKCEVerifier, &ar.ReturnTo, &ar.LinkToken, &ar.SessionID, &ar.CreatedAt)
+		&ar.PKCEVerifier, &ar.ReturnTo, &ar.LinkToken, &ar.HandoffID, &ar.SessionID, &ar.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrConsumed

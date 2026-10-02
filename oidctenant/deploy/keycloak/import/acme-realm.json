@@ -12,7 +12,9 @@
   "ssoSessionMaxLifespan": 3600,
   "roles": {
     "realm": [
-      { "name": "default" }
+      {
+        "name": "default"
+      }
     ]
   },
   "clients": [
@@ -29,7 +31,8 @@
       "secret": "acme-rp-secret",
       "redirectUris": [
         "http://localhost:8080/oauth/callback",
-        "http://localhost:8080/oauth/link/callback"
+        "http://localhost:8080/oauth/link/callback",
+        "http://localhost:8080/oauth/handoff/callback"
       ],
       "webOrigins": [],
       "defaultClientScopes": [
@@ -54,9 +57,15 @@
       "lastName": "Acme",
       "requiredActions": [],
       "credentials": [
-        { "type": "password", "value": "alice-pass", "temporary": false }
+        {
+          "type": "password",
+          "value": "alice-pass",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["default"]
+      "realmRoles": [
+        "default"
+      ]
     },
     {
       "username": "carol",
@@ -67,9 +76,15 @@
       "lastName": "Acme",
       "requiredActions": [],
       "credentials": [
-        { "type": "password", "value": "carol-pass", "temporary": false }
+        {
+          "type": "password",
+          "value": "carol-pass",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["default"]
+      "realmRoles": [
+        "default"
+      ]
     }
   ],
   "components": {
@@ -78,8 +93,12 @@
         "name": "rsa-generated",
         "providerId": "rsa-generated",
         "config": {
-          "priority": ["100"],
-          "keySize": ["2048"]
+          "priority": [
+            "100"
+          ],
+          "keySize": [
+            "2048"
+          ]
         }
       }
     ]

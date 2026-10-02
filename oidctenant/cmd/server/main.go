@@ -43,7 +43,6 @@ func main() {
 
 	stop := make(chan struct{})
 	go cleanupLoop(context.Background(), st, cfg.CleanupInterval, cfg.AuthRequestTTL, logger, stop)
-
 	httpServer := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           srv.Routes(),
@@ -70,7 +69,7 @@ func main() {
 	}
 }
 
-// cleanupLoop 周期性删除过期的 auth_request 行，防止 state 表无限增长。
+// cleanupLoop 周期性删除过期的 auth_request 行，并把到期的交接申请翻转为 expired。
 func cleanupLoop(ctx context.Context, st *store.Store, interval, ttl time.Duration,
 	logger *log.Logger, stop chan struct{}) {
 	ticker := time.NewTicker(interval)
@@ -84,6 +83,11 @@ func cleanupLoop(ctx context.Context, st *store.Store, interval, ttl time.Durati
 		case <-ticker.C:
 			if err := st.DeleteExpiredAuthRequests(ctx, time.Now().Add(-ttl)); err != nil {
 				logger.Printf("cleanup auth_requests: %v", err)
+			}
+			if n, err := st.ExpireDueHandoffs(ctx); err != nil {
+				logger.Printf("expire handoffs: %v", err)
+			} else if n > 0 {
+				logger.Printf("expired %d handoff requests", n)
 			}
 		}
 	}

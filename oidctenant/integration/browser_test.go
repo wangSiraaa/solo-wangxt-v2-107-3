@@ -25,7 +25,16 @@ type browserClient struct {
 
 func newBrowserClient(t *testing.T) *browserClient {
 	appJar, _ := cookiejar.New(nil)
-	kcJar, _ := cookiejar.New(nil)
+	return newBrowserClientWithJars(t, appJar, nil)
+}
+
+// newBrowserClientWithJars 用给定的 app cookie jar（通常从已有浏览器克隆 sid）
+// 和可选的独立 KC jar 构造浏览器；kcJar 传 nil 则新建空 KC SSO 上下文。
+// 用于在同一应用会话内、以一个全新的 Keycloak SSO 会话完成强制重认证。
+func newBrowserClientWithJars(t *testing.T, appJar http.CookieJar, kcJar http.CookieJar) *browserClient {
+	if kcJar == nil {
+		kcJar, _ = cookiejar.New(nil)
+	}
 	noFollow := func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return &browserClient{
 		t: t,
@@ -35,6 +44,16 @@ func newBrowserClient(t *testing.T) *browserClient {
 		},
 		app: &http.Client{Jar: appJar, Timeout: 20 * time.Second, CheckRedirect: noFollow},
 	}
+}
+
+// cloneAppJar 深拷贝浏览器的应用 cookie（sid）到新 jar，KC SSO 不带过去。
+func (b *browserClient) cloneAppJar() http.CookieJar {
+	u, _ := url.Parse(appBaseURL)
+	jar, _ := cookiejar.New(nil)
+	for _, c := range b.app.Jar.Cookies(u) {
+		jar.SetCookies(u, []*http.Cookie{c})
+	}
+	return jar
 }
 
 // appCallback 是 /oauth/callback 或 /oauth/link/callback 的落点结果。

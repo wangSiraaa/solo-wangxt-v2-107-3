@@ -118,6 +118,8 @@ func (a *keycloakAdmin) CreateUser(realm, username, email, password string) {
 		"username":        username,
 		"email":           email,
 		"emailVerified":   true,
+		"firstName":       username,
+		"lastName":        "Test",
 		"enabled":         true,
 		"requiredActions": []string{},
 		"credentials": []map[string]any{
@@ -144,7 +146,8 @@ func (a *keycloakAdmin) CreateUser(realm, username, email, password string) {
 	}
 	id := users[0].ID
 	a.do(http.MethodPut, "/admin/realms/"+realm+"/users/"+id, map[string]any{
-		"email": email, "emailVerified": true, "enabled": true,
+		"email": email, "emailVerified": true,
+		"firstName": username, "lastName": "Test", "enabled": true,
 	}, http.StatusNoContent)
 	a.setPassword(realm, id, password)
 }

@@ -19,6 +19,7 @@ const (
 	// callbackPath 是应用唯一的 OIDC 回调路径，redirect_uri 由 BASE_URL 拼接。
 	callbackPath  = "/oauth/callback"
 	linkCBPath    = "/oauth/link/callback"
+	handoffCBPath = "/oauth/handoff/callback"
 	sessionCookie = "sid"
 )
 
@@ -62,6 +63,16 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /t/{slug}/api/links", s.requireSession(s.linkStart))
 	mux.HandleFunc("GET "+linkCBPath, s.requireSession(s.linkCallback))
 	mux.HandleFunc("GET /t/{slug}/api/links/{token}", s.requireSession(s.linkFinalize))
+
+	// 身份交接申请
+	mux.HandleFunc("POST /t/{slug}/api/handoffs", s.requireSession(s.handoffCreate))
+	mux.HandleFunc("GET /t/{slug}/api/handoffs", s.requireSession(s.handoffList))
+	mux.HandleFunc("POST /t/{slug}/api/handoffs/{id}/confirm", s.requireSession(s.handoffConfirmStart))
+	mux.HandleFunc("POST /t/{slug}/api/handoffs/{id}/reject", s.requireSession(s.handoffReject))
+	mux.HandleFunc("POST /t/{slug}/api/handoffs/{id}/cancel", s.requireSession(s.handoffCancel))
+	mux.HandleFunc("POST /t/{slug}/api/handoffs/{id}/complete", s.requireSession(s.handoffComplete))
+	mux.HandleFunc("GET /t/{slug}/api/handoffs/{id}", s.requireSession(s.handoffGet))
+	mux.HandleFunc("GET "+handoffCBPath, s.requireSession(s.handoffCallback))
 
 	// 受保护的业务接口
 	mux.HandleFunc("GET /t/{slug}/api/me", s.requireSession(s.me))

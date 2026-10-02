@@ -16,6 +16,7 @@ type Config struct {
 
 	SessionTTL      time.Duration
 	LinkTTL         time.Duration
+	HandoffTTL      time.Duration
 	AuthRequestTTL  time.Duration
 	CookieSecure    bool
 	CookieSameSite  string
@@ -36,6 +37,7 @@ func Load() (*Config, error) {
 		Addr:            getenv("ADDR", ":8080"),
 		SessionTTL:      8 * time.Hour,
 		LinkTTL:         10 * time.Minute,
+		HandoffTTL:      15 * time.Minute,
 		AuthRequestTTL:  10 * time.Minute,
 		CookieSecure:    os.Getenv("COOKIE_SECURE") == "true",
 		CookieSameSite:  getenv("COOKIE_SAMESITE", "lax"),
